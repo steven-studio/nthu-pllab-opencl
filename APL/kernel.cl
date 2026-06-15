@@ -136,67 +136,6 @@ __kernel void matmul_kernel(__global const float* x,
     }
 }
 
-__kernel void convxbias_kernel(
-    __global const float* in_x,
-    __global const float* filter,
-    __global float* out,
-    const float bias,
-    const int in_n,
-    const int in_c,
-    const int in_h,
-    const int in_w,
-    const int filter_n,
-    const int filter_c,
-    const int filter_h,
-    const int filter_w,
-    const int out_c,
-    const int out_h,
-    const int out_w,
-    const int stride,
-    const int pad)
-{
-    int gid = get_global_id(0);
-    int total = in_n * out_c * out_h * out_w;
-    if (gid >= total) return;
-
-    int w = gid % out_w;
-    int h = (gid / out_w) % out_h;
-    int c = (gid / (out_w * out_h)) % out_c;
-    int n = gid / (out_w * out_h * out_c);
-
-    float sum = 0.0f;
-
-    for (int z = 0; z < filter_c; z++) {
-        for (int y = 0; y < filter_h; y++) {
-            for (int x = 0; x < filter_w; x++) {
-                int in_h_idx = h * stride + y - pad;
-                int in_w_idx = w * stride + x - pad;
-
-                if (in_h_idx >= 0 && in_h_idx < in_h &&
-                    in_w_idx >= 0 && in_w_idx < in_w) {
-
-                    int input_index =
-                        n * in_c * in_h * in_w +
-                        z * in_h * in_w +
-                        in_h_idx * in_w +
-                        in_w_idx;
-
-                    int filter_index =
-                        c * filter_c * filter_h * filter_w +
-                        z * filter_h * filter_w +
-                        y * filter_w +
-                        x;
-
-                    sum += in_x[input_index] * filter[filter_index];
-                }
-            }
-        }
-    }
-
-    out[gid] = sum + bias;
-}
-
-
 #define TS 16
 
 __kernel void matmul_tiled_kernel(__global const float* A,
@@ -341,4 +280,107 @@ __kernel void matmul_tiled_vec_kernel(__global const float* A,
     if (global_row < M && global_col < N) {
         C[global_row * N + global_col] = sum;
     }
+}
+
+__kernel void convxbias_kernel(
+    __global const float* in_x,
+    __global const float* filter,
+    __global float* out,
+    const float bias,
+    const int in_n,
+    const int in_c,
+    const int in_h,
+    const int in_w,
+    const int filter_n,
+    const int filter_c,
+    const int filter_h,
+    const int filter_w,
+    const int out_c,
+    const int out_h,
+    const int out_w,
+    const int stride,
+    const int pad)
+{
+    int gid = get_global_id(0);
+    int total = in_n * out_c * out_h * out_w;
+    if (gid >= total) return;
+
+    int w = gid % out_w;
+    int h = (gid / out_w) % out_h;
+    int c = (gid / (out_w * out_h)) % out_c;
+    int n = gid / (out_w * out_h * out_c);
+
+    float sum = 0.0f;
+
+    for (int z = 0; z < filter_c; z++) {
+        for (int y = 0; y < filter_h; y++) {
+            for (int x = 0; x < filter_w; x++) {
+                int in_h_idx = h * stride + y - pad;
+                int in_w_idx = w * stride + x - pad;
+
+                if (in_h_idx >= 0 && in_h_idx < in_h &&
+                    in_w_idx >= 0 && in_w_idx < in_w) {
+
+                    int input_index =
+                        n * in_c * in_h * in_w +
+                        z * in_h * in_w +
+                        in_h_idx * in_w +
+                        in_w_idx;
+
+                    int filter_index =
+                        c * filter_c * filter_h * filter_w +
+                        z * filter_h * filter_w +
+                        y * filter_w +
+                        x;
+
+                    sum += in_x[input_index] * filter[filter_index];
+                }
+            }
+        }
+    }
+
+    out[gid] = sum + bias;
+}
+
+__kernel void convxbias_bn_relu6_kernel(
+    __global const float* in_x,
+    __global const float* filter,
+    __global const float* mean,
+    __global const float* std,
+    __global const float* gamma,
+    __global const float* beta,
+    __global float* out,
+    float bias,
+    int N, int C, int H, int W,
+    int K, int FH, int FW, int OH, int OW,
+    int stride, int pad, int total
+)
+{
+    int gid = get_global_id(0);
+    if (gid >= total) return;
+
+    int ow = gid % OW;
+    int oh = (gid / OW) % OH;
+    int oc = (gid / (OW * OH)) % K;
+    int n  = gid / (K * OH * OW);
+
+    float sum = bias;
+    for (int ic = 0; ic < C; ic++) {
+        for (int fy = 0; fy < FH; fy++) {
+            for (int fx = 0; fx < FW; fx++) {
+                int ih = oh * stride + fy - pad;
+                int iw = ow * stride + fx - pad;
+                if (ih >= 0 && ih < H && iw >= 0 && iw < W) {
+                    int x_idx = n * C * H * W + ic * H * W + ih * W + iw;
+                    int f_idx = oc * C * FH * FW + ic * FH * FW + fy * FW + fx;
+                    sum += in_x[x_idx] * filter[f_idx];
+                }
+            }
+        }
+    }
+
+    float v = (sum - mean[oc]) / std[oc];
+    v = v * gamma[oc] + beta[oc];
+    v = fmax(0.0f, fmin(6.0f, v));
+    out[gid] = v;
 }

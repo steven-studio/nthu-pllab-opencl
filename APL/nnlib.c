@@ -1622,6 +1622,420 @@ cpu_fallback:
 #endif
 }
 
+void convxbias_bn_relu6_fused(
+    tensor* out,
+    tensor* in_x,
+    tensor* filter,
+    float bias,
+    tensor* mean,
+    tensor* std,
+    tensor* gamma,
+    tensor* beta,
+    int padding,
+    int stride,
+    int groups
+)
+{
+#ifdef DEBUG_TIME
+    double start = clock();
+#endif
+    //shape
+    int inPic = in_x->n;
+    int filterKernelNum = filter->n;
+
+    assert(in_x->h >= filter->h);
+    assert(in_x->w >= filter->w);
+
+    int v_offset_Y = 0;
+    int v_offset_X = 0;
+
+    //virtual_height, virtual_weight
+    int v_height = 0;
+    int v_width = 0;
+
+    //virtual_bound_height , virtual_bound_weight
+    int vb_height = 0;
+    int vb_width = 0;
+
+    int pad = 0;
+
+    if (padding)
+    {
+        out->n = in_x->n;
+        out->c = filter->n;
+        out->h = ceil(((float)in_x->h)/((float)stride));
+        out->w = ceil(((float)in_x->w)/((float)stride));
+        
+        //padding
+        int newY = filter->h + (out->h - 1) * stride;
+        int newX = filter->w + (out->w - 1) * stride;
+
+        v_offset_Y = (newY - in_x->h) / 2;
+        v_offset_X = (newX - in_x->w) / 2;
+
+        vb_height = in_x->h + v_offset_Y;
+        vb_width  = in_x->w + v_offset_X;
+        
+        pad = ((out->h - 1) * stride + filter->h - in_x->h) / 2;
+    }
+    else
+    {
+        out->n = in_x->n;
+        out->c = filter->n;
+        out->h = ceil(((float)(in_x->h - filter->h+ 1))/((float)stride));
+        out->w = ceil(((float)(in_x->w - filter->w+ 1))/((float)stride));
+
+        vb_height = in_x->h;
+        vb_width  = in_x->w;
+        
+        pad = 0;
+    }
+
+    //virtual_height, virtual_weight
+    v_height = v_offset_Y;
+    v_width = v_offset_X;
+
+    make_tensor(out, out->n, out->c, out->h, out->w);
+
+	if(groups == 1 && filter->h == 1 && filter->w == 1) //general convolution
+	{
+    cl_int err;
+    cl_kernel kernel = NULL;
+    cl_mem bufX      = NULL;
+    cl_mem bufFilter = NULL;
+    cl_mem bufMean   = NULL;  // ← 移到這裡
+    cl_mem bufStd    = NULL;
+    cl_mem bufGamma  = NULL;
+    cl_mem bufBeta   = NULL;
+    cl_mem bufOut    = NULL;
+    int total = 0;
+    size_t bytesX = 0;
+    size_t bytesFilter = 0;
+    size_t bytesOut = 0;
+    size_t globalSize = 0;
+
+    if (!init_opencl_common()) goto cpu_fallback_general;
+
+    total = out->n * out->c * out->h * out->w;
+    bytesX = sizeof(float) * in_x->n * in_x->c * in_x->h * in_x->w;
+    bytesFilter = sizeof(float) * filter->n * filter->c * filter->h * filter->w;
+    bytesOut = sizeof(float) * total;
+    globalSize = (size_t)total;
+
+    kernel = get_kernel("convxbias_bn_relu6_kernel");
+    if (!kernel) goto cpu_fallback_general;
+
+    bufX = clCreateBuffer(gContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                          bytesX, in_x->data, &err);
+    if (err != CL_SUCCESS) goto cpu_fallback_general;
+    bufMean  = clCreateBuffer(gContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                                 sizeof(float) * mean->size, mean->data, &err);
+    bufStd   = clCreateBuffer(gContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                                    sizeof(float) * std->size, std->data, &err);
+    bufGamma = clCreateBuffer(gContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                                    sizeof(float) * gamma->size, gamma->data, &err);
+    bufBeta  = clCreateBuffer(gContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                                    sizeof(float) * beta->size, beta->data, &err);
+
+    bufFilter = clCreateBuffer(gContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                               bytesFilter, filter->data, &err);
+    if (err != CL_SUCCESS) goto cpu_fallback_general;
+
+    bufOut = clCreateBuffer(gContext, CL_MEM_WRITE_ONLY,
+                            bytesOut, NULL, &err);
+    if (err != CL_SUCCESS) goto cpu_fallback_general;
+
+    err  = clSetKernelArg(kernel, 0,  sizeof(cl_mem), &bufX);
+    err |= clSetKernelArg(kernel, 1,  sizeof(cl_mem), &bufFilter);
+    err |= clSetKernelArg(kernel, 2,  sizeof(cl_mem), &bufMean);
+    err |= clSetKernelArg(kernel, 3,  sizeof(cl_mem), &bufStd);
+    err |= clSetKernelArg(kernel, 4,  sizeof(cl_mem), &bufGamma);
+    err |= clSetKernelArg(kernel, 5,  sizeof(cl_mem), &bufBeta);
+    err |= clSetKernelArg(kernel, 6,  sizeof(cl_mem), &bufOut);
+    err |= clSetKernelArg(kernel, 7,  sizeof(float),  &bias);
+    err |= clSetKernelArg(kernel, 8,  sizeof(int),    &in_x->n);
+    err |= clSetKernelArg(kernel, 9,  sizeof(int),    &in_x->c);
+    err |= clSetKernelArg(kernel, 10, sizeof(int),    &in_x->h);
+    err |= clSetKernelArg(kernel, 11, sizeof(int),    &in_x->w);
+    err |= clSetKernelArg(kernel, 12, sizeof(int),    &filter->n);
+    err |= clSetKernelArg(kernel, 13, sizeof(int),    &filter->h);
+    err |= clSetKernelArg(kernel, 14, sizeof(int),    &filter->w);
+    err |= clSetKernelArg(kernel, 15, sizeof(int),    &out->c);
+    err |= clSetKernelArg(kernel, 16, sizeof(int),    &out->h);
+    err |= clSetKernelArg(kernel, 17, sizeof(int),    &out->w);
+    err |= clSetKernelArg(kernel, 18, sizeof(int),    &stride);
+    err |= clSetKernelArg(kernel, 19, sizeof(int),    &pad);
+    err |= clSetKernelArg(kernel, 20, sizeof(int),    &total);
+    if (err != CL_SUCCESS) goto cpu_fallback_general;
+
+    err = clEnqueueNDRangeKernel(gQueue, kernel, 1, NULL,
+                                 &globalSize, NULL, 0, NULL, NULL);
+    if (err != CL_SUCCESS) goto cpu_fallback_general;
+
+    err = clEnqueueReadBuffer(gQueue, bufOut, CL_TRUE, 0,
+                              bytesOut, out->data, 0, NULL, NULL);
+    if (err != CL_SUCCESS) goto cpu_fallback_general;
+
+    clReleaseMemObject(bufX);
+    clReleaseMemObject(bufFilter);
+    clReleaseMemObject(bufOut);
+    clReleaseKernel(kernel);
+
+    goto done_general;
+
+cpu_fallback_general:
+    if (bufX) clReleaseMemObject(bufX);
+    if (bufFilter) clReleaseMemObject(bufFilter);
+    if (bufOut) clReleaseMemObject(bufOut);
+    if (kernel) clReleaseKernel(kernel);
+
+    for (int Pic = 0; Pic < inPic; Pic++)
+    {
+        for (int filterKernel = 0; filterKernel < filterKernelNum; filterKernel++)
+        {
+            for (int height = 0; height < out->h; height++)
+            {
+                for (int width = 0; width < out->w; width++)
+                {
+                    float featureValue = 0;
+                    int offsetY = height * stride;
+                    int offsetX = width * stride;
+
+                    for (int z = 0; z < filter->c; z++)
+                    {
+                        for (int y = 0; y < filter->h; y++)
+                        {
+                            for (int x = 0; x < filter->w; x++)
+                            {
+                                int l_height = y + offsetY;
+                                int l_weight = x + offsetX;
+
+                                if ((l_height >= v_height && l_weight >= v_width) &&
+                                    (l_height < vb_height && l_weight < vb_width))
+                                {
+                                    featureValue +=
+                                        in_x->data[Pic * in_x->c * in_x->h * in_x->w +
+                                                   z * in_x->h * in_x->w +
+                                                   (l_height - v_offset_Y) * in_x->w +
+                                                   (l_weight - v_offset_X)]
+                                        *
+                                        filter->data[filterKernel * filter->c * filter->h * filter->w +
+                                                     z * filter->h * filter->w +
+                                                     y * filter->w + x];
+                                }
+                            }
+                        }
+                    }
+
+                    out->data[Pic * out->c * out->h * out->w +
+                              filterKernel * out->h * out->w +
+                              height * out->w + width] = featureValue + bias;
+                }
+            }
+        }
+    }
+
+    // ← 補這裡
+    {
+        int HW = out->h * out->w;
+        for (int oc = 0; oc < out->c; oc++)
+            for (int hw = 0; hw < HW; hw++)
+            {
+                int idx = oc * HW + hw;
+                float v = out->data[idx];
+                v = (v - mean->data[oc]) / std->data[oc];
+                v = v * gamma->data[oc] + beta->data[oc];
+                v = fmaxf(0.0f, fminf(6.0f, v));
+                out->data[idx] = v;
+            }
+    }
+
+done_general:
+    ;
+	}
+    else if (groups == 1)
+    {
+#ifdef im2colxGEMM
+
+		int out_w,out_h;
+		int workspace_size;
+
+		out_w = out->h;
+		out_h = out->w;
+		workspace_size = out_h * out_w * filter->h * filter->h * in_x->c;
+		float * colD = 0;
+		
+		if (!colD) colD = (float *) calloc(workspace_size, sizeof(float));    
+		int c,h,w;
+
+		int height_col = out_h;
+		int width_col = out_w;
+		int channels_col = in_x->c * filter->h * filter->h;
+		
+		for (int Pic = 0; Pic < inPic; Pic++)
+		{
+			for (c = 0; c < channels_col; ++c) 
+			{
+				for (h = 0; h < height_col; ++h) 
+				{
+					for (w = 0; w < width_col; ++w) 
+					{
+						int w_offset = c % filter->h;
+						int h_offset = (c / filter->h) % filter->h;
+						int c_im = c / filter->h / filter->h;
+						int im_row = h_offset + h * stride;
+						int im_col = w_offset + w * stride;
+						int col_index = (c * height_col + h) * width_col + w;
+						//int col_index = (h * width_col + w) * channels_col + c;
+						colD[col_index] = im2col_get_pixel(in_x , in_x->h, in_x->w, in_x->c, im_row, im_col, c_im, pad);
+					}
+				}
+			}
+
+			int m = filter->n; // input height N
+			int n = out_w * out_h; // filter width = number of filter = 9
+			int p = filter->c * filter->h * filter->w; // CHW = input width = filter height = channel*ksize*ksize
+
+			for (int i=0; i < m; i++) //2
+			{
+				for (int j=0; j < n; j++) //9
+				{
+					float sum = 0.0;
+					for(int k = 0; k < p; k++) //18
+					{
+						// [ik][kj]
+						sum += filter->data[i * p + k] * colD[k * n + j];
+					}
+					out->data[i*n+j] = sum + bias;
+				}
+			}
+
+            // ← 補在這裡，GEMM 結束後套 BN+ReLU6
+            int HW = out->h * out->w;
+            for (int oc = 0; oc < out->c; oc++)
+            {
+                for (int hw = 0; hw < HW; hw++)
+                {
+                    int idx = oc * HW + hw;
+                    float v = out->data[idx];
+                    v = (v - mean->data[oc]) / std->data[oc];
+                    v = v * gamma->data[oc] + beta->data[oc];
+                    v = fmaxf(0.0f, fminf(6.0f, v));
+                    out->data[idx] = v;
+                }
+            }
+
+			free(colD);
+		}
+#else    
+		for (int Pic = 0; Pic < inPic; Pic++)
+		{
+			for (int filterKernel = 0; filterKernel < filterKernelNum; filterKernel++)// 32
+			{
+				for (int height = 0; height < out->h; height = height + 1)//28
+				{
+					for (int width = 0; width < out->w; width = width + 1)//28
+					{
+						float featureValue = 0;
+						int offsetY = (height * stride);
+						int offsetX = (width  * stride);
+
+						for (int z = 0; z < filter->c; z++)
+						{
+							for (int y = 0; y < filter->h; y++)
+							{
+								 for (int x = 0; x < filter->w; x++)
+								 {
+									// logical_height, logical_weight
+									int l_height = y + offsetY;
+									int l_weight = x + offsetX;
+
+									if ((l_height >= v_height && l_weight >= v_width) && (l_height < vb_height && l_weight < vb_width))
+										featureValue = featureValue + in_x->data[Pic * in_x->c * in_x->h * in_x->w + z * in_x->h * in_x->w + (l_height - v_offset_Y) * in_x->w + (l_weight - v_offset_X)] * filter->data[filterKernel * filter->c * filter->h * filter->w + z * filter->h * filter->w + y * filter->w + x];
+								}
+							}
+						}
+						out->data[Pic * out->c * out->h * out->w + filterKernel * out->h * out->w + height * out->w + width] = featureValue + bias;
+					}
+				}
+			}
+		}
+
+        // ← 補這裡
+        {
+            int HW = out->h * out->w;
+            for (int oc = 0; oc < out->c; oc++)
+                for (int hw = 0; hw < HW; hw++)
+                {
+                    int idx = oc * HW + hw;
+                    float v = out->data[idx];
+                    v = (v - mean->data[oc]) / std->data[oc];
+                    v = v * gamma->data[oc] + beta->data[oc];
+                    v = fmaxf(0.0f, fminf(6.0f, v));
+                    out->data[idx] = v;
+                }
+        }
+#endif
+    }
+	else
+	{
+        int count = 0;
+		for (int Pic = 0; Pic < inPic; Pic++)
+		{
+			for (int filterKernel = 0; filterKernel < filterKernelNum; filterKernel++)// 32
+			{
+				for (int height = 0; height < out->h; height = height + 1)//28
+				{
+					for (int width = 0; width < out->w; width = width + 1)//28
+					{
+						float featureValue = 0;
+						int offsetY = (height * stride);
+						int offsetX = (width  * stride);
+
+                        for (int y = 0; y < filter->h; y++)
+                        {
+                             for (int x = 0; x < filter->w; x++)
+                             {
+                                // logical_height, logical_weight
+                                int l_height = y + offsetY;
+                                int l_weight = x + offsetX;
+
+                                if ((l_height >= v_height && l_weight >= v_width) && (l_height < vb_height && l_weight < vb_width))
+                                {
+                                    featureValue = featureValue + in_x->data[Pic * in_x->c * in_x->h * in_x->w + filterKernel * in_x->h * in_x->w + (l_height - v_offset_Y) * in_x->w + (l_weight - v_offset_X)] * filter->data[filterKernel * filter->c * filter->h * filter->w + 0 * filter->h * filter->w + y * filter->w + x];
+                                    //colD[count] = in_x->data[Pic * in_x->c * in_x->h * in_x->w + filterKernel * in_x->h * in_x->w + (l_height - v_offset_Y) * in_x->w + (l_weight - v_offset_X)]; 
+                                    //colD[count] = colD[count] * filter->data[filterKernel * filter->c * filter->h * filter->w + 0 * filter->h * filter->w + y * filter->w + x];
+                                    //featureValue = featureValue + colD[count];                                      
+                                }
+                            }
+                        }
+						out->data[Pic * out->c * out->h * out->w + filterKernel * out->h * out->w + height * out->w + width] = featureValue + bias;
+					}
+				}
+			}
+		}
+
+        // ← 補在這裡，GEMM 結束後套 BN+ReLU6
+        int HW = out->h * out->w;
+        for (int oc = 0; oc < out->c; oc++)
+        {
+            for (int hw = 0; hw < HW; hw++)
+            {
+                int idx = oc * HW + hw;
+                float v = out->data[idx];
+                v = (v - mean->data[oc]) / std->data[oc];
+                v = v * gamma->data[oc] + beta->data[oc];
+                v = fmaxf(0.0f, fminf(6.0f, v));
+                out->data[idx] = v;
+            }
+        }
+	}
+#ifdef DEBUG_TIME
+    double end = clock();
+    printf("[convxbias_bn_relu6_fused time = %1.3f seconds, groups = %d]\n",(end-start)/CLOCKS_PER_SEC, groups);
+#endif
+}
+
 void sigmoid(tensor * out, tensor * in_x)
 {
 #ifdef DEBUG_TIME

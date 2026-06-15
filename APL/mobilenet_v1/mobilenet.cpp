@@ -573,60 +573,46 @@ void init(tensor * T)
 
 void kernel(tensor * T)
 {
-	convxbias(&T[3], &T[0], &T[2], tensor_n = 0.000000, padding = 1, stride = 2, groups = 1);  /* [1, 32, 112, 112], layer : 1,  */ 
-	bn_relu6_fused(&T[10], &T[3], &T[6], &T[253], &T[4], &T[5]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[10], &T[0], &T[2], 0.0f, &T[6], &T[253], &T[4], &T[5], 1, 2, 1);
 	convxbias(&T[12], &T[10], &T[11], tensor_n = 0.000000, padding = 1, stride = 1, groups = 32);  /* [1, 32, 112, 112], layer : 5,  */ 
 	bn_relu6_fused(&T[19], &T[12], &T[15], &T[257], &T[13], &T[14]);  /* fused BN+ReLU6 */
-	convxbias(&T[21], &T[19], &T[20], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 64, 112, 112], layer : 9,  */ 
-	bn_relu6_fused(&T[28], &T[21], &T[24], &T[261], &T[22], &T[23]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[28], &T[19], &T[20], 0.0f, &T[24], &T[261], &T[22], &T[23], 1, 1, 1);
 	convxbias(&T[30], &T[28], &T[29], tensor_n = 0.000000, padding = 1, stride = 2, groups = 64);  /* [1, 64, 56, 56], layer : 13,  */ 
 	bn_relu6_fused(&T[37], &T[30], &T[33], &T[265], &T[31], &T[32]);  /* fused BN+ReLU6 */
-	convxbias(&T[39], &T[37], &T[38], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 128, 56, 56], layer : 17,  */ 
-	bn_relu6_fused(&T[46], &T[39], &T[42], &T[269], &T[40], &T[41]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[46], &T[37], &T[38], 0.0f, &T[42], &T[269], &T[40], &T[41], 1, 1, 1);
 	convxbias(&T[48], &T[46], &T[47], tensor_n = 0.000000, padding = 1, stride = 1, groups = 128);  /* [1, 128, 56, 56], layer : 21,  */ 
 	bn_relu6_fused(&T[55], &T[48], &T[51], &T[273], &T[49], &T[50]);  /* fused BN+ReLU6 */
-	convxbias(&T[57], &T[55], &T[56], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 128, 56, 56], layer : 25,  */ 
-	bn_relu6_fused(&T[64], &T[57], &T[60], &T[277], &T[58], &T[59]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[64], &T[55], &T[56], 0.0f, &T[60], &T[277], &T[58], &T[59], 1, 1, 1);
 	convxbias(&T[66], &T[64], &T[65], tensor_n = 0.000000, padding = 1, stride = 2, groups = 128);  /* [1, 128, 28, 28], layer : 29,  */ 
 	bn_relu6_fused(&T[73], &T[66], &T[69], &T[281], &T[67], &T[68]);  /* fused BN+ReLU6 */
-	convxbias(&T[75], &T[73], &T[74], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 256, 28, 28], layer : 33,  */ 
-	bn_relu6_fused(&T[82], &T[75], &T[78], &T[285], &T[76], &T[77]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[82], &T[73], &T[74], 0.0f, &T[78], &T[285], &T[76], &T[77], 1, 1, 1);
 	convxbias(&T[84], &T[82], &T[83], tensor_n = 0.000000, padding = 1, stride = 1, groups = 256);  /* [1, 256, 28, 28], layer : 37,  */ 
 	bn_relu6_fused(&T[91], &T[84], &T[87], &T[289], &T[85], &T[86]);  /* fused BN+ReLU6 */
-	convxbias(&T[93], &T[91], &T[92], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 256, 28, 28], layer : 41,  */ 
-	bn_relu6_fused(&T[100], &T[93], &T[96], &T[293], &T[94], &T[95]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[100], &T[91], &T[92], 0.0f, &T[96], &T[293], &T[94], &T[95], 1, 1, 1);
 	convxbias(&T[102], &T[100], &T[101], tensor_n = 0.000000, padding = 1, stride = 2, groups = 256);  /* [1, 256, 14, 14], layer : 45,  */ 
 	bn_relu6_fused(&T[109], &T[102], &T[105], &T[297], &T[103], &T[104]);  /* fused BN+ReLU6 */
-	convxbias(&T[111], &T[109], &T[110], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 512, 14, 14], layer : 49,  */ 
-	bn_relu6_fused(&T[118], &T[111], &T[114], &T[301], &T[112], &T[113]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[118], &T[109], &T[110], 0.0f, &T[114], &T[301], &T[112], &T[113], 1, 1, 1);
 	convxbias(&T[120], &T[118], &T[119], tensor_n = 0.000000, padding = 1, stride = 1, groups = 512);  /* [1, 512, 14, 14], layer : 53,  */ 
 	bn_relu6_fused(&T[127], &T[120], &T[123], &T[305], &T[121], &T[122]);  /* fused BN+ReLU6 */
-	convxbias(&T[129], &T[127], &T[128], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 512, 14, 14], layer : 57,  */ 
-	bn_relu6_fused(&T[136], &T[129], &T[132], &T[309], &T[130], &T[131]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[136], &T[127], &T[128], 0.0f, &T[132], &T[309], &T[130], &T[131], 1, 1, 1);
 	convxbias(&T[138], &T[136], &T[137], tensor_n = 0.000000, padding = 1, stride = 1, groups = 512);  /* [1, 512, 14, 14], layer : 61,  */ 
 	bn_relu6_fused(&T[145], &T[138], &T[141], &T[313], &T[139], &T[140]);  /* fused BN+ReLU6 */
-	convxbias(&T[147], &T[145], &T[146], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 512, 14, 14], layer : 65,  */ 
-	bn_relu6_fused(&T[154], &T[147], &T[150], &T[317], &T[148], &T[149]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[154], &T[145], &T[146], 0.0f, &T[150], &T[317], &T[148], &T[149], 1, 1, 1);
 	convxbias(&T[156], &T[154], &T[155], tensor_n = 0.000000, padding = 1, stride = 1, groups = 512);  /* [1, 512, 14, 14], layer : 69,  */ 
 	bn_relu6_fused(&T[163], &T[156], &T[159], &T[321], &T[157], &T[158]);  /* fused BN+ReLU6 */
-	convxbias(&T[165], &T[163], &T[164], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 512, 14, 14], layer : 73,  */ 
-	bn_relu6_fused(&T[172], &T[165], &T[168], &T[325], &T[166], &T[167]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[172], &T[163], &T[164], 0.0f, &T[168], &T[325], &T[166], &T[167], 1, 1, 1);
 	convxbias(&T[174], &T[172], &T[173], tensor_n = 0.000000, padding = 1, stride = 1, groups = 512);  /* [1, 512, 14, 14], layer : 77,  */ 
 	bn_relu6_fused(&T[181], &T[174], &T[177], &T[329], &T[175], &T[176]);  /* fused BN+ReLU6 */
-	convxbias(&T[183], &T[181], &T[182], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 512, 14, 14], layer : 81,  */ 
-	bn_relu6_fused(&T[190], &T[183], &T[186], &T[333], &T[184], &T[185]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[190], &T[181], &T[182], 0.0f, &T[186], &T[333], &T[184], &T[185], 1, 1, 1);
 	convxbias(&T[192], &T[190], &T[191], tensor_n = 0.000000, padding = 1, stride = 1, groups = 512);  /* [1, 512, 14, 14], layer : 85,  */ 
 	bn_relu6_fused(&T[199], &T[192], &T[195], &T[337], &T[193], &T[194]);  /* fused BN+ReLU6 */
-	convxbias(&T[201], &T[199], &T[200], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 512, 14, 14], layer : 89,  */ 
-	bn_relu6_fused(&T[208], &T[201], &T[204], &T[341], &T[202], &T[203]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[208], &T[199], &T[200], 0.0f, &T[204], &T[341], &T[202], &T[203], 1, 1, 1);
 	convxbias(&T[210], &T[208], &T[209], tensor_n = 0.000000, padding = 1, stride = 2, groups = 512);  /* [1, 512, 7, 7], layer : 93,  */ 
 	bn_relu6_fused(&T[217], &T[210], &T[213], &T[345], &T[211], &T[212]);  /* fused BN+ReLU6 */
-	convxbias(&T[219], &T[217], &T[218], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 1024, 7, 7], layer : 97,  */ 
-	bn_relu6_fused(&T[226], &T[219], &T[222], &T[349], &T[220], &T[221]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[226], &T[217], &T[218], 0.0f, &T[222], &T[349], &T[220], &T[221], 1, 1, 1);
 	convxbias(&T[228], &T[226], &T[227], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1024);  /* [1, 1024, 7, 7], layer : 101,  */ 
 	bn_relu6_fused(&T[235], &T[228], &T[231], &T[353], &T[229], &T[230]);  /* fused BN+ReLU6 */
-	convxbias(&T[237], &T[235], &T[236], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 1024, 7, 7], layer : 105,  */ 
-	bn_relu6_fused(&T[244], &T[237], &T[240], &T[357], &T[238], &T[239]);  /* fused BN+ReLU6 */
+	convxbias_bn_relu6_fused(&T[244], &T[235], &T[236], 0.0f, &T[240], &T[357], &T[238], &T[239], 1, 1, 1);
 	avg_pool(&T[245], &T[244], size = 7, padding = 0, stride = 1);  /* [1, 1024, 1, 1], layer : 109,  */ 
 	convxbias(&T[248], &T[245], &T[246], tensor_n = 0.000000, padding = 1, stride = 1, groups = 1);  /* [1, 1001, 1, 1], layer : 110,  */ 
 	add(&T[249], &T[248], &T[247]);  /* [1, 1001, 1, 1], layer : 111,  */ 
